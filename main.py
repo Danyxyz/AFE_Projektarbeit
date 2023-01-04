@@ -5,6 +5,9 @@ from sklearn.cluster import KMeans
 import numpy as np
 import pandas as pd
 from numpy import savetxt
+from warnings import simplefilter
+from sklearn.exceptions import ConvergenceWarning
+simplefilter("ignore", category=ConvergenceWarning)
 
 # read in the data, only use relevant coloumns
 data = pd.read_csv("Bauzonen_Gebaeude_2.csv", on_bad_lines="warn", engine="python", delimiter=',',
@@ -28,23 +31,21 @@ middle_zone_EAST = []
 high_zone_NORTH = []
 high_zone_EAST = []
 qgis_coordinate_list = []
-k_contingent = 0
+
 
 
 #Loop through community set and work with subsets of each community
 #Community table is modified due to wrong bfs-number on original document, working with indeces
 #for i in range(0, len(gemeindeData) -1):
 #Test Set for Luzern (7500 Datapoints)
-for i in range(531, 532):
+for i in range(0, len(gemeindeData)-1):
     df_subset = df_gebaude[df_gebaude.Index == i]
     k_iterator = i
     print("Gemeindefortschritt ", i)
 
 #Loop through the subsets and store each zones in different list, Low / Middle / High
-    for i in range(0, len(df_subset) - 1):
-        if df_subset.Bauzone.iloc[i] == 'Wohnzonen' or df_subset.Bauzone.iloc[i] == 'eingeschränkte Bauzonen' or \
-                df_subset.Bauzone.iloc[i] == 'weitere Bauzonen' or df_subset.Bauzone.iloc[
-            i] == 'Verkehrszonen innerhalb der Bauzonen':
+    for i in range(0, len(df_subset)-1):
+        if df_subset.Bauzone.iloc[i] == 'Wohnzonen' or df_subset.Bauzone.iloc[i] == 'eingeschränkte Bauzonen' or df_subset.Bauzone.iloc[i] == 'weitere Bauzonen' or df_subset.Bauzone.iloc[i] == 'Verkehrszonen innerhalb der Bauzonen':
             low_zone_NORTH.append(df_subset.GKODN.iloc[i])
             low_zone_EAST.append(df_subset.GKODE.iloc[i])
         else:
@@ -71,31 +72,23 @@ for i in range(531, 532):
 #numpy arrays instead of dataframe - much faster and kmeans requiers np
     np_array_low = df_low.to_numpy()
     np_array_middle = df_middle.to_numpy()
-    np_array_high = df_low.to_numpy()
+    np_array_high = df_high.to_numpy()
+
 
     # Begin kmeans Calculations with low
-    # Some communitites might not have enough zones to calculate a proper kmeans clustering hence try
+    # Some communities might not have enough zones to calculate a proper kmeans clustering hence try
 
 #--------------------------------------------------------------------------------------------------------kmeans on first lists low
 
-    k = df_gemeindeData.K1_Hoch[k_iterator]
+    k = df_gemeindeData.K3_Tief[k_iterator]
     k = k.astype(int)
     k = round(k * 0.2)
-    print("Number of cluster for low: ",k)
-    print(np_array_low.size / 2)
-    print(type(k))
 
     #trying to solve problem of having not enough data on buildings zones for small communities
-    if (np_array_low.size / 2 < k):
-        k = round(np_array_low.size * 0.5)
-        k = k.astype(int)
-        if (np_array_low.size / 2 < k):
-            k = round(np_array_low.size * 0.5)
-            k = k.astype(int)
-        else:
-            k = round(np_array_low.size / 2 / 2)
-            k = k.astype(int)
-        print("Grösse von K_neu: ", k," Grösse von np_array_low: ", np_array_low)
+    if (np_array_low.size / 2 < k and np_array_low.size != 0):
+        N = 2
+        while np_array_low.size / 2 < k:
+            np_array_low = np.vstack([np_array_low] * N)
 
     try:
         kmeans = KMeans(n_clusters=k, random_state=0).fit(np_array_low)
@@ -112,24 +105,19 @@ for i in range(531, 532):
             number = np.round(centroids[i], 2)
             coordinate_list.append(number)
         # Append to list everything to list before final saving
+    except Exception:
+        pass
 
     finally:
         qgis_coordinate_list.extend(coordinate_list)
-        print("Added to list low")
-        k = df_gemeindeData.K1_Hoch[k_iterator]
+        k = df_gemeindeData.K3_Tief[k_iterator]
         k = k.astype(int)
         k = round(k * 0.4)
-        print("Number of cluster for middle: ",k)
-        print(np_array_middle.size / 2)
 
-        if (np_array_middle.size / 2 < k):
-            k = round(np_array_middle.size * 0.5)
-            if (np_array_middle.size / 2 < k):
-                k = round(np_array_middle.size * 0.5)
-            else:
-                k = round(np_array_middle.size / 2 / 2)
-            print("Grösse von K_neu: ", k ," Grösse np_array_middle: ", np_array_middle.size)
-
+        if (np_array_middle.size / 2 < k and np_array_middle.size != 0):
+            N = 2
+            while np_array_middle.size / 2 < k:
+                np_array_middle = np.vstack([np_array_middle] * N)
     try:
         kmeans = KMeans(n_clusters=k, random_state=0).fit(np_array_middle)
         # Set the labels
@@ -145,26 +133,20 @@ for i in range(531, 532):
             number = np.round(centroids[i], 2)
             coordinate_list.append(number)
 
-
         qgis_coordinate_list.extend(coordinate_list)
-        print("Added to list middle")
-
+    except Exception:
+        pass
     finally:
 #-------------------------------------------------------------------------------Run kmeans on third list high
-        k = df_gemeindeData.K1_Hoch[k_iterator]
+        k = df_gemeindeData.K3_Tief[k_iterator]
         k = k.astype(int)
         k = round(k * 0.4)
-        print("Number of cluster for high: ",k)
-        print(np_array_high.size / 2)
 
-        if (np_array_high.size / 2 < k):
-            k = round(np_array_high.size * 0.5)
-            if (np_array_high.size / 2 < k):
-                k = round(np_array_high.size * 0.5)
 
-            else:
-                k = round(np_array_high.size / 2 / 2)
-            print("Grösse von K_neu: ", k ," Grösse np_array_middle: ", np_array_middle.size)
+        if (np_array_high.size / 2 < k and np_array_high.size != 0):
+            N = 2
+            while np_array_high.size / 2 < k:
+                np_array_high = np.vstack([np_array_high] * N)
 
     try:
         kmeans = KMeans(n_clusters=k, random_state=0).fit(np_array_high)
@@ -180,13 +162,14 @@ for i in range(531, 532):
         for i in range(len(centroids_x)):
             number = np.round(centroids[i], 2)
             coordinate_list.append(number)
+    except Exception:
+        pass
     finally:
         qgis_coordinate_list.extend(coordinate_list)
-        print("Added to list high")
         k_iterator = k_iterator + 1
 
 #save to csv and export
-np.savetxt("Charging_Stations_Luzern.csv", qgis_coordinate_list, delimiter=",", fmt="%f")
+np.savetxt("Charging_Stations_K3_Tief.csv", qgis_coordinate_list, delimiter=",", fmt="%f")
 #np.savetxt("Charging_Stations.csv", qgis_coordinate_list, delimiter=",", fmt="%f")
 #Number should be around half a million records
 print("Ladestationen ", len(qgis_coordinate_list))
